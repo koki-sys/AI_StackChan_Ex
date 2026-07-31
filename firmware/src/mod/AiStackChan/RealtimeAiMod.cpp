@@ -22,6 +22,7 @@ using namespace m5avatar;
 extern Avatar avatar;
 extern bool servo_home;
 extern void sw_tone();
+extern void err_tone();
 extern void alarm_tone();
 ///////////////
 
@@ -72,7 +73,11 @@ void RealtimeAiMod::btnA_pressed(void)
 {
 #if defined(ARDUINO_M5STACK_ATOMS3R)
   Serial.println("Btn A pressed");
-  sw_tone();
+  if (pRtLLM->isRealtimeRecording()) {
+    err_tone();
+  } else {
+    sw_tone();
+  }
   toggleRealtimeRecord();
 #endif
 }
@@ -99,34 +104,41 @@ void RealtimeAiMod::btnC_pressed(void)
 
 void RealtimeAiMod::display_touched(int16_t x, int16_t y)
 {
-  if (box_stt.contain(x, y))
-  {
-    sw_tone();
-    toggleRealtimeRecord();
-  }
-#ifdef USE_SERVO
-  if (box_servo.contain(x, y))
-  {
-    sw_tone();
-    servo_home = !servo_home;
-  }
-#endif
-  if (box_BtnA.contain(x, y))
-  {
-    //sw_tone();
-  }
+  bool touched_button = false;
   if (box_BtnC.contain(x, y))
   {
     btnC_pressed();
+    touched_button = true;
   }
+#ifdef USE_SERVO
+  else if (box_servo.contain(x, y))
+  {
+    sw_tone();
+    servo_home = !servo_home;
+    touched_button = true;
+  }
+#endif
 
+  if (!touched_button)
+  {
+    if (pRtLLM->isRealtimeRecording()) {
+      err_tone();
+    } else {
+      sw_tone();
+    }
+    toggleRealtimeRecord();
+  }
 }
 
 void RealtimeAiMod::doubleTapped(float ax, float ay, float az)
 {
   Serial.printf("Mod double tapped. ax=%.3f ay=%.3f az=%.3f\n", ax, ay, az);
 #if defined(ARDUINO_M5STACK_ATOMS3R)
-  sw_tone();
+  if (pRtLLM->isRealtimeRecording()) {
+    err_tone();
+  } else {
+    sw_tone();
+  }
   toggleRealtimeRecord();
 #endif
 }
