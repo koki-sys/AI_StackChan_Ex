@@ -31,6 +31,7 @@
 #include <ArduinoJson.h>
 #include "SpiRamJsonDocument.h"
 #include <ESP8266FtpServer.h>
+#include <esp_sntp.h>
 
 #include "llm/ChatGPT/ChatGPT.h"
 #include "llm/ChatGPT/FunctionCall.h"
@@ -57,7 +58,7 @@ bool isOffline = false;
 
 
 // NTP接続情報　NTP connection information.
-const char* NTPSRV      = "ntp.jst.mfeed.ad.jp";    // NTPサーバーアドレス NTP server address.
+const char* NTPSRV      = "pool.ntp.org";    // NTPサーバーアドレス NTP server address.
 const long  GMT_OFFSET  = 9 * 3600;                 // GMT-TOKYO(時差９時間）9 hours time difference.
 const int   DAYLIGHT_OFFSET = 0;                    // サマータイム設定なし No daylight saving time setting
 
@@ -201,9 +202,32 @@ void time_sync(const char* ntpsrv, long gmt_offset, int daylight_offset) {
   struct tm timeInfo; 
   char buf[60];
 
-  configTime(gmt_offset, daylight_offset, ntpsrv);          // NTPサーバと同期
+  Serial.println("Starting NTP sync...");
+  M5.Lcd.println("Starting NTP sync...");
+  // 以前のNTPインスタンスをクリアするために一度明示的に停止する
+  sntp_stop();
+  // 複数のNTPサーバー（フォールバック用）を指定
+  configTime(gmt_offset, daylight_offset, ntpsrv, "ntp.nict.jp", "time.google.com");
 
-  if (getLocalTime(&timeInfo)) {                            // timeinfoに現在時刻を格納
+  // 時刻が同期される（2000年以降になる）まで最大30秒間ループ
+  int retry = 0;
+  const int retry_limit = 300; // 300 * 100ms = 30000ms
+  bool sync_success = false;
+  while (retry < retry_limit) {
+    if (getLocalTime(&timeInfo, 0)) { // タイムアウト0で即時取得
+      if (timeInfo.tm_year > 100) { // 1900 + 100 = 2000年以降であれば同期完了とみなす
+        sync_success = true;
+        break;
+      }
+    }
+    Serial.print(".");
+    delay(100);
+    retry++;
+  }
+  Serial.println("");
+
+  // 同期が完了したか確認
+  if (sync_success) {
     Serial.print("NTP : ");                                 // シリアルモニターに表示
     Serial.println(ntpsrv);                                 // シリアルモニターに表示
 
@@ -214,7 +238,8 @@ void time_sync(const char* ntpsrv, long gmt_offset, int daylight_offset) {
     Serial.println(buf);                                    // シリアルモニターに表示
   }
   else {
-    Serial.print("NTP Sync Error ");                        // シリアルモニターに表示
+    Serial.println("NTP Sync Error (Timeout or network issue)"); // シリアルモニターに表示
+    M5.Lcd.println("NTP Sync Error (Timeout or network issue)");
   }
 }
 
@@ -248,8 +273,42 @@ void sw_tone()
   M5.Mic.end();
   M5.Speaker.begin();
   delay(300);     // AtomS3Rはこのdelayがないと鳴らないときがある
-  M5.Speaker.tone(1000, 100);
-  delay(500);
+
+  // 現在の音量を退避し、一時的に5割に下げます
+  uint8_t org_vol = M5.Speaker.getVolume();
+  M5.Speaker.setVolume(org_vol * 0.5);
+
+  M5.Speaker.tone(784, 50);   // 「ソ」（G5）を0.05秒
+  delay(40);                  // わずかな隙間
+  M5.Speaker.tone(880, 110);  // 「ラ」（A5）を0.11秒
+  delay(150);                 // 音が鳴り終わるのを待つ
+
+  // 音量を元の値に戻します
+  M5.Speaker.setVolume(org_vol);
+
+  M5.Speaker.end();
+  M5.Mic.begin();
+  exitMutexAudio();
+}
+
+void err_tone()
+{
+  enterMutexAudio();
+  M5.Mic.end();
+  M5.Speaker.begin();
+  delay(300);     // AtomS3Rはこのdelayがないと鳴らないときがある
+
+  // 現在の音量を退避し、一時的に5割に下げます
+  uint8_t org_vol = M5.Speaker.getVolume();
+  M5.Speaker.setVolume(org_vol * 0.5);
+
+  M5.Speaker.tone(400, 100);  // 低い音（400Hz）を0.1秒
+  delay(120);                 // わずかな隙間
+  M5.Speaker.tone(400, 100);  // 低い音（400Hz）を0.1秒
+  delay(150);                 // 音が鳴り終わるのを待つ
+
+  // 音量を元の値に戻します
+  M5.Speaker.setVolume(org_vol);
 
   M5.Speaker.end();
   M5.Mic.begin();
@@ -432,7 +491,11 @@ void setup()
       M5.Lcd.print("Can't connect to WiFi. Start offline mode.\n");
     }
 
+    Serial.println("Initializing Robot...");
+    M5.Lcd.println("Initializing Robot...");
     robot = new Robot(system_config);
+    Serial.println("Robot initialized.");
+    M5.Lcd.println("Robot initialized.");
 
     //SD.end();
   } else {
@@ -442,10 +505,18 @@ void setup()
     //WiFi.begin();
   }
   
+  Serial.println("Initializing MP3...");
+  M5.Lcd.println("Initializing MP3...");
   mp3_init();
+  Serial.println("MP3 initialized.");
+  M5.Lcd.println("MP3 initialized.");
 
   //mod設定
+  Serial.println("Initializing Mod...");
+  M5.Lcd.println("Initializing Mod...");
   init_mod();
+  Serial.println("Mod initialized.");
+  M5.Lcd.println("Mod initialized.");
 
 #if defined(ARDUINO_M5STACK_ATOMS3R)
 #if defined(CAT_FACE)
@@ -456,8 +527,12 @@ void setup()
   avatar.setPosition(-56, -96);
   avatar.init();
 #else
+  Serial.println("Initializing Avatar...");
+  M5.Lcd.println("Initializing Avatar...");
   //avatar.init();
   avatar.init(16);
+  Serial.println("Avatar initialized.");
+  M5.Lcd.println("Avatar initialized.");
 #endif
 
   avatar.addTask(lipSync, "lipSync", 2048, 2);
