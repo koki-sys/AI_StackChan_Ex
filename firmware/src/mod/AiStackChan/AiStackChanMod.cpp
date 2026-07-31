@@ -227,7 +227,46 @@ void AiStackChanMod::btnC_pressed(void)
 
 void AiStackChanMod::display_touched(int16_t x, int16_t y)
 {
-  if (box_stt.contain(x, y))
+  bool touched_button = false;
+
+  if (box_BtnC.contain(x, y))
+  {
+    btnC_pressed();
+    touched_button = true;
+  }
+  else if (box_BtnA.contain(x, y))
+  {
+#if defined(ENABLE_CAMERA)
+    isSilentMode = !isSilentMode;
+    if(isSilentMode){
+      avatar.setSpeechText("サイレントモード");
+    }
+    else{
+      avatar.setSpeechText("サイレントモード解除");
+    }
+    delay(2000);
+    avatar.setSpeechText("");
+#endif
+    touched_button = true;
+  }
+#if defined(ENABLE_CAMERA)
+  else if (box_subWindow.contain(x, y))
+  {
+    isSubWindowON = !isSubWindowON;
+    avatar.set_isSubWindowEnable(isSubWindowON);
+    touched_button = true;
+  }
+#endif //ENABLE_CAMERA
+#ifdef USE_SERVO
+  else if (box_servo.contain(x, y))
+  {
+    //servo_home = !servo_home;
+    //sw_tone();
+    touched_button = true;
+  }
+#endif
+
+  if (!touched_button)
   {
     sw_tone();
 #if defined(ENABLE_CAMERA)
@@ -245,41 +284,6 @@ void AiStackChanMod::display_touched(int16_t x, int16_t y)
     STT_ChatGPT();
 #endif
   }
-#ifdef USE_SERVO
-  if (box_servo.contain(x, y))
-  {
-    //servo_home = !servo_home;
-    //sw_tone();
-  }
-#endif
-  if (box_BtnA.contain(x, y))
-  {
-#if defined(ENABLE_CAMERA)
-    isSilentMode = !isSilentMode;
-    if(isSilentMode){
-      avatar.setSpeechText("サイレントモード");
-    }
-    else{
-      avatar.setSpeechText("サイレントモード解除");
-    }
-    delay(2000);
-    avatar.setSpeechText("");
-#else
-    //sw_tone();
-#endif
-  }
-  if (box_BtnC.contain(x, y))
-  {
-    btnC_pressed();
-  }
-#if defined(ENABLE_CAMERA)
-  if (box_subWindow.contain(x, y))
-  {
-    isSubWindowON = !isSubWindowON;
-    avatar.set_isSubWindowEnable(isSubWindowON);
-  }
-#endif //ENABLE_CAMERA
-
 }
 
 void AiStackChanMod::doubleTapped(float ax, float ay, float az)
