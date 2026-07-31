@@ -45,9 +45,14 @@ void asyncTtsStreamTask(void *arg) {
 
 Robot::Robot(StackchanExConfig& config) : m_config(config)
 {
+  Serial.println("Robot Constructor: Start");
+  M5.Lcd.println("Robot Const: Start");
+
   // Servo setting
   //
 #ifdef USE_SERVO
+  Serial.println("Robot Constructor: Initializing Servo...");
+  M5.Lcd.println("Robot Const: Init Servo...");
   servo = new ServoCustom();
   servo->begin(config.getServoInfo(AXIS_X)->pin, config.getServoInfo(AXIS_X)->start_degree,
               config.getServoInfo(AXIS_X)->offset,
@@ -55,21 +60,29 @@ Robot::Robot(StackchanExConfig& config) : m_config(config)
               config.getServoInfo(AXIS_Y)->offset,
               (ServoType)config.getServoType(),
               &M5.In_I2C);
+  Serial.println("Robot Constructor: Servo initialized.");
+  M5.Lcd.println("Robot Const: Servo OK");
 #endif
 
   // TakaoBase setting 
   //
   // 設定ファイルのTakaoBaseがtrueの場合に、TakaoBaseのUSBからの給電でバッテリーを充電できるようにする
   // ただし、この設定ではバッテリーからの給電／横のUSBからの給電ではサーボが動かない
+  Serial.println("Robot Constructor: Power setting...");
+  M5.Lcd.println("Robot Const: Power set...");
   M5.Power.setExtOutput(!config.getUseTakaoBase());
 
   // AI service setting
   //
 #if defined(REALTIME_API)
+  Serial.println("Robot Constructor: Initializing Realtime LLM...");
+  M5.Lcd.println("Robot Const: Init RT LLM...");
   //LLM setting
   initRtLLM(config);
 
   #if defined(REALTIME_API_WITH_TTS)
+    Serial.println("Robot Constructor: Initializing Realtime TTS...");
+    M5.Lcd.println("Robot Const: Init RT TTS...");
     initTTS(config);
     invokeAsyncTtsStreamTask();
   #endif
@@ -80,13 +93,21 @@ Robot::Robot(StackchanExConfig& config) : m_config(config)
   module_llm_param = module_llm_param_t();
 #endif
   
+  Serial.println("Robot Constructor: Initializing LLM...");
+  M5.Lcd.println("Robot Const: Init LLM...");
   initLLM(config);
+  Serial.println("Robot Constructor: Initializing TTS...");
+  M5.Lcd.println("Robot Const: Init TTS...");
   initTTS(config);
+  Serial.println("Robot Constructor: Initializing STT...");
+  M5.Lcd.println("Robot Const: Init STT...");
   initSTT(config);
 
   // ModuleLLM initialize
   //
 #if defined(USE_LLM_MODULE)
+  Serial.println("Robot Constructor: Setting up ModuleLLM...");
+  M5.Lcd.println("Robot Const: Setup ModLLM...");
   module_llm_param.rxPin = config.getExConfig().moduleLLM.rxPin;
   module_llm_param.txPin = config.getExConfig().moduleLLM.txPin;
   int wakeword_type = config.getExConfig().wakeword.type;
@@ -104,6 +125,8 @@ Robot::Robot(StackchanExConfig& config) : m_config(config)
 
 #endif  //REALTIME_API
 
+  Serial.println("Robot Constructor: End");
+  M5.Lcd.println("Robot Const: End");
 }
 
 bool Robot::isAllOfflineService()
